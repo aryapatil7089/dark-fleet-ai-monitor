@@ -203,7 +203,9 @@
             'global': { bbox: [[[-90, -180], [90, 180]]], center: [20, 0], zoom: 2 }
         };
 
-        const ws = new WebSocket(`ws://${window.location.host}/ws/frontend`);
+        // Dynamic WebSocket protocol selection
+        const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const ws = new WebSocket(protocol + window.location.host + '/ws/frontend');
 
         // Change Region Command
         function changeRegion() {
