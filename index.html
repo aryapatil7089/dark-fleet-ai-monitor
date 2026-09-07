@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dark Fleet AI Monitor</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; 
+            display: flex; height: 100vh; background: #0b0f19; color: #f1f5f9; overflow: hidden; 
+        }
+        #map { flex: 3; height: 100%; }
+        #sidebar { 
+            flex: 1; min-width: 390px; max-width: 440px; height: 100%; 
+            border-left: 1px solid #1e293b; background: #0f172a; 
+            display: flex; flex-direction: column; min-height: 0;
+        }
+        
+        .header { padding: 14px 16px 0 16px; background: #090d16; flex-shrink: 0; }
+        .header h1 { font-size: 1.05rem; font-weight: 700; color: #38bdf8; letter-spacing: 0.5px; }
+        
+        /* Region Selector */
+        .region-container { margin-top: 12px; margin-bottom: 8px; }
+        .region-container label { font-size: 0.68rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; display: block; margin-bottom: 4px; }
+        .region-select { width: 100%; padding: 8px; background: #1e293b; color: #f8fafc; border: 1px solid #334155; border-radius: 4px; font-size: 0.8rem; outline: none; cursor: pointer; font-weight: 600; }
+        .region-select:focus { border-color: #38bdf8; }
+
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;}
+        .stat-box { background: #1e293b; padding: 8px 12px; border-radius: 6px; }
+        .stat-box .label { font-size: 0.68rem; color: #94a3b8; text-transform: uppercase; font-weight: 600; }
+        .stat-box .value { font-size: 1.1rem; font-weight: 700; margin-top: 2px; }
+        .val-total { color: #38bdf8; }
+        .val-anomalies { color: #f43f5e; }
+
+        .tabs { display: flex; border-bottom: 1px solid #1e293b; }
+        .tab-btn { flex: 1; background: transparent; color: #64748b; border: none; padding: 10px; font-size: 0.8rem; font-weight: 700; cursor: pointer; border-bottom: 2px solid transparent; }
+        .tab-btn.active { color: #38bdf8; border-bottom-color: #38bdf8; }
+        .tab-btn:hover:not(.active) { color: #94a3b8; }
+
+        #directory-view, #inspector-view, #manual-view { display: none; flex-direction: column; flex: 1; min-height: 0; }
+        #directory-view.active, #inspector-view.active, #manual-view.active { display: flex; }
+        #inspector-view, #manual-view { padding: 12px 16px; }
+
+        .directory-header { padding: 10px 16px 6px 16px; font-size: 0.72rem; color: #64748b; text-transform: uppercase; font-weight: 700; flex-shrink: 0; }
+        .feed { flex: 1; overflow-y: auto; padding: 4px 12px 14px 12px; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+        .card { background: #131d31; border-radius: 6px; padding: 10px 12px; font-size: 0.82rem; cursor: pointer; border: 1px solid #1e293b; position: relative; overflow: hidden; flex-shrink: 0; }
+        .card:hover { border-color: #38bdf8; background: #1a263f; }
+        .card.active-card { border-color: #38bdf8; background: #1a2744; }
+        .card-stripe { position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+        .card-row { display: flex; justify-content: space-between; align-items: center; }
+        .vessel-title { font-weight: 600; color: #f8fafc; font-size: 0.88rem; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .mmsi-label { color: #64748b; font-size: 0.74rem; font-family: monospace; }
+        .card-meta { display: flex; gap: 10px; margin-top: 6px; font-size: 0.75rem; color: #94a3b8; align-items: center; flex-wrap: wrap; }
+        
+        .badge { padding: 2px 6px; border-radius: 4px; font-size: 0.68rem; font-weight: 700; white-space: nowrap; }
+        .badge-warning { background: rgba(244, 63, 94, 0.2); color: #fb7185; border: 1px solid rgba(244, 63, 94, 0.4); }
+        .badge-normal { background: rgba(56, 189, 248, 0.15); color: #38bdf8; }
+
+        .btn-back { background: #1e293b; color: #38bdf8; border: 1px solid #334155; padding: 6px 12px; border-radius: 4px; font-size: 0.75rem; font-weight: 700; cursor: pointer; margin-bottom: 12px; align-self: flex-start; }
+        .btn-back:hover { background: #334155; }
+        .vessel-info-box { background: #131d31; padding: 12px; border-radius: 6px; border: 1px solid #1e293b; margin-bottom: 10px; flex-shrink: 0; }
+        .reason-box { background: #2a1217; border-left: 4px solid #f43f5e; padding: 10px; border-radius: 4px; font-size: 0.78rem; color: #fecdd3; margin-bottom: 12px; flex-shrink: 0; }
+        .table-container { flex: 1; overflow-y: auto; border: 1px solid #1e293b; border-radius: 6px; background: #090d16; min-height: 0; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.73rem; text-align: left; }
+        th { background: #131d31; padding: 8px; color: #94a3b8; font-weight: 600; position: sticky; top: 0; z-index: 2; border-bottom: 1px solid #1e293b; }
+        td { padding: 7px 8px; border-bottom: 1px solid #141f33; font-family: monospace; }
+        tr.ping-anomaly { background: rgba(244, 63, 94, 0.12); color: #fda4af; }
+        tr:hover { background: #1e293b; cursor: pointer; }
+
+        .form-group { margin-bottom: 12px; }
+        .form-group label { display: block; font-size: 0.75rem; color: #94a3b8; margin-bottom: 4px; font-weight: 600; }
+        .form-group input { width: 100%; padding: 8px; background: #090d16; border: 1px solid #334155; color: #f8fafc; border-radius: 4px; font-family: monospace; }
+        .form-group input:focus { outline: none; border-color: #38bdf8; }
+        .btn-submit { width: 100%; background: #38bdf8; color: #0f172a; border: none; padding: 10px; border-radius: 4px; font-weight: 700; cursor: pointer; margin-top: 10px; }
+        .btn-submit:hover { background: #7dd3fc; }
+        
+        .scenario-btn { background: #1e293b; color: #f8fafc; border: 1px solid #334155; padding: 6px; border-radius: 4px; font-size: 0.7rem; cursor: pointer; transition: 0.2s; }
+        .scenario-btn:hover { background: #334155; }
+        .s-normal { color: #22c55e; border-color: #22c55e; }
+        .s-dark { color: #f43f5e; border-color: #f43f5e; }
+        .s-spoof { color: #fbbf24; border-color: #fbbf24; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <div id="sidebar">
+        <!-- Header -->
+        <div class="header">
+            <h1>Dark Fleet AI Monitor</h1>
+            
+            <!-- Region Selector -->
+            <div class="region-container">
+                <label for="region-select">Active Monitoring Zone</label>
+                <select id="region-select" class="region-select" onchange="changeRegion()">
+                    <option value="singapore">Singapore Strait (Asia)</option>
+                    <option value="english_channel">English Channel (Europe)</option>
+                    <option value="gulf_mexico">Gulf of Mexico (North America)</option>
+                    <option value="gibraltar">Strait of Gibraltar (Europe/Africa)</option>
+                    <option value="global">Global Ocean View (All Ships)</option>
+                </select>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-box">
+                    <div class="label">Unique Vessels</div>
+                    <div class="value val-total" id="stat-total">0</div>
+                </div>
+                <div class="stat-box">
+                    <div class="label">Suspect Vessels</div>
+                    <div class="value val-anomalies" id="stat-anomalies">0</div>
+                </div>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="tabs">
+                <button id="btn-tab-live" class="tab-btn active" onclick="switchView('directory-view')">Live Fleet</button>
+                <button id="btn-tab-manual" class="tab-btn" onclick="switchView('manual-view')">ML Scenarios</button>
+            </div>
+        </div>
+
+        <!-- VIEW 1: Directory -->
+        <div id="directory-view" class="active">
+            <div class="directory-header">Vessel Directory (Click to Inspect)</div>
+            <div class="feed" id="feed"></div>
+        </div>
+
+        <!-- VIEW 2: Inspector -->
+        <div id="inspector-view">
+            <button class="btn-back" onclick="switchView('directory-view'); clearFocus();">← Back to All Vessels</button>
+            <div class="vessel-info-box">
+                <h2 id="insp-name">Vessel Name</h2>
+                <div style="font-size: 0.78rem; color: #64748b; font-family: monospace; margin-top: 2px;">
+                    MMSI: <span id="insp-mmsi" style="color: #94a3b8;">000000000</span>
+                </div>
+                <div class="card-meta" style="margin-top: 8px;">
+                    <span>Logs: <strong id="insp-count" style="color: #38bdf8;">0</strong></span>
+                    <span>Last Speed: <strong id="insp-speed" style="color: #f8fafc;">0 kn</strong></span>
+                    <span style="display: flex; align-items: center; gap: 5px;">Status: <span id="insp-badge" class="badge">NORMAL</span></span>
+                </div>
+            </div>
+            <div id="insp-reasons" class="reason-box" style="display: none;"></div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <div style="font-size: 0.72rem; color: #64748b; text-transform: uppercase; font-weight: 700;">Recorded Ping History</div>
+                <button id="tz-toggle" onclick="toggleTimeZone()" style="background: transparent; color: #38bdf8; border: 1px solid #38bdf8; padding: 2px 8px; border-radius: 4px; font-size: 0.65rem; cursor: pointer;">Showing: Local Time</button>
+            </div>
+            <div class="table-container">
+                <table>
+                    <thead><tr><th>Date & Time</th><th>Speed</th><th>Gap</th><th>Dist</th><th>Status</th></tr></thead>
+                    <tbody id="insp-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- VIEW 3: Manual Input -->
+        <div id="manual-view" style="overflow-y: auto;">
+            <h2 style="font-size: 1rem; color: #f8fafc; margin-bottom: 8px;">DBSCAN Threat Scenarios</h2>
+            <p style="font-size: 0.75rem; color: #94a3b8; margin-bottom: 16px;">
+                Inject simulated gaps to test how the Unsupervised ML pipeline classifies behavioral evasion tactics.
+            </p>
+            
+            <div style="display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px;">
+                <button class="scenario-btn s-normal" onclick="fillScenario(14.0, 2.0, 0.86)">✅ Normal Commercial Voyage</button>
+                <button class="scenario-btn s-dark" onclick="fillScenario(12.0, 240.0, 88.9)">🏴‍☠️ Dark Fleet Blackout (4 hr silence)</button>
+                <button class="scenario-btn s-spoof" onclick="fillScenario(102.3, 1.2, 3.7)">⚡ GPS Spoofing / Teleportation</button>
+                <button class="scenario-btn s-dark" onclick="fillScenario(11.0, 15.0, 5.0)">⚠️ Micro-Blackout in Congested Area</button>
+            </div>
+            
+            <div class="form-group"><label>Implied Speed (knots)</label><input type="number" step="any" id="man-speed" placeholder="e.g., 14.0"></div>
+            <div class="form-group"><label>Time Gap (minutes)</label><input type="number" step="any" id="man-time" placeholder="e.g., 2.0"></div>
+            <div class="form-group"><label>Distance Gap (km)</label><input type="number" step="any" id="man-dist" placeholder="e.g., 0.86"></div>
+            
+            <button class="btn-submit" onclick="runManualTest()">Analyze Threat Vector</button>
+            <div id="manual-result" style="margin-top: 16px;"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map('map', { zoomControl: false }).setView([1.25, 103.9], 10);
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+            attribution: '&copy; Esri &mdash; OpenStreetMap', maxZoom: 16
+        }).addTo(map);
+
+        // State variables
+        let vessels = {};      
+        let focusedMmsi = null;  
+        let mapLayers = [];      
+        let totalAnomaliesCount = 0;
+        let showUTC = false;     
+        
+        // Define Regions
+        const regions = {
+            'singapore': { bbox: [[[1.15, 103.6], [1.35, 104.0]]], center: [1.25, 103.9], zoom: 10 },
+            'english_channel': { bbox: [[[50.8, 1.1], [51.2, 1.8]]], center: [51.0, 1.45], zoom: 10 },
+            'gulf_mexico': { bbox: [[[28.5, -95.5], [29.8, -94.2]]], center: [29.15, -94.85], zoom: 9 },
+            'gibraltar': { bbox: [[[35.7, -6.0], [36.2, -5.2]]], center: [35.95, -5.6], zoom: 10 },
+            'global': { bbox: [[[-90, -180], [90, 180]]], center: [20, 0], zoom: 2 }
+        };
+
+        const ws = new WebSocket(`ws://${window.location.host}/ws/frontend`);
+
+        // Change Region Command
+        function changeRegion() {
+            const val = document.getElementById('region-select').value;
+            const region = regions[val];
+            
+            // 1. Pan Camera
+            map.setView(region.center, region.zoom);
+            
+            // 2. Wipe Local State
+            vessels = {};
+            mapLayers.forEach(layer => map.removeLayer(layer));
+            mapLayers = [];
+            totalAnomaliesCount = 0;
+            document.getElementById('stat-total').innerText = '0';
+            document.getElementById('stat-anomalies').innerText = '0';
+            document.getElementById('feed').innerHTML = '';
+            clearFocus();
+            
+            // 3. Command Backend Server
+            if (ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({ action: "change_region", bbox: region.bbox }));
+            }
+        }
+
+        function getVesselColor(mmsi) {
+            let hash = 0; const str = mmsi.toString();
+            for (let i = 0; i < str.length; i++) hash = str.charCodeAt(i) + ((hash << 5) - hash);
+            return `hsl(${Math.abs(hash) % 360}, 85%, 65%)`;
+        }
+
+        function switchView(viewId) {
+            document.querySelectorAll('#directory-view, #inspector-view, #manual-view').forEach(el => el.classList.remove('active'));
+            document.getElementById(viewId).classList.add('active');
+            document.getElementById('btn-tab-live').classList.toggle('active', viewId !== 'manual-view');
+            document.getElementById('btn-tab-manual').classList.toggle('active', viewId === 'manual-view');
+        }
+
+        function fillScenario(speed, time, dist) {
+            document.getElementById('man-speed').value = speed;
+            document.getElementById('man-time').value = time;
+            document.getElementById('man-dist').value = dist;
+            document.getElementById('manual-result').innerHTML = '';
+        }
+
+        async function runManualTest() {
+            const speed = document.getElementById('man-speed').value;
+            const time_gap = document.getElementById('man-time').value;
+            const distance_gap = document.getElementById('man-dist').value;
+            const resDiv = document.getElementById('manual-result');
+
+            if (!speed || !time_gap || !distance_gap) {
+                resDiv.innerHTML = `<span style="color:#f43f5e; font-size:0.8rem;">Please fill in all fields.</span>`;
+                return;
+            }
+
+            resDiv.innerHTML = `<span style="color:#94a3b8; font-size:0.8rem;">Analyzing...</span>`;
+
+            try {
+                const response = await fetch('/api/manual_score', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ speed: parseFloat(speed), time_gap: parseFloat(time_gap), distance_gap: parseFloat(distance_gap) })
+                });
+
+                const data = await response.json();
+                
+                if (data.is_anomaly) {
+                    let reasonsList = data.reasons.map(r => `<li>${r}</li>`).join('');
+                    resDiv.innerHTML = `
+                        <div class="reason-box" style="margin-top: 0;">
+                            <strong>⚠️ SUSPECT THREAT DETECTED</strong>
+                            <div style="font-family: monospace; margin: 6px 0; color: #94a3b8;">DBSCAN Isolation Score: ${data.dbscan_dist}</div>
+                            <ul style="padding-left: 16px; margin-top: 5px;">${reasonsList}</ul>
+                        </div>`;
+                } else {
+                    resDiv.innerHTML = `
+                        <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid #38bdf8; padding: 10px; border-radius: 4px; color: #38bdf8; font-size: 0.8rem; font-weight: bold;">
+                            ✅ VOYAGE COMPLIANT (Normal Behavior)
+                            <div style="font-family: monospace; font-weight: normal; margin-top: 4px; color: #94a3b8;">DBSCAN Proximity: ${data.dbscan_dist}</div>
+                        </div>`;
+                }
+            } catch (err) {
+                resDiv.innerHTML = `<span style="color:#f43f5e; font-size:0.8rem;">Error connecting to API. Is backend running?</span>`;
+            }
+        }
+
+        function toggleTimeZone() {
+            showUTC = !showUTC;
+            document.getElementById('tz-toggle').innerText = showUTC ? "Showing: UTC" : "Showing: Local Time";
+            if (focusedMmsi) renderInspector(focusedMmsi);
+        }
+
+        ws.onmessage = function(event) {
+            const ping = JSON.parse(event.data);
+            const mmsi = ping.mmsi;
+
+            if (!vessels[mmsi]) {
+                vessels[mmsi] = { mmsi, name: ping.ship_name || "Unknown Vessel", color: getVesselColor(mmsi), hasAnomaly: false, anomalyReasons: new Set(), history: [] };
+            }
+            const vessel = vessels[mmsi];
+            if (ping.ship_name && ping.ship_name !== "Unknown Vessel") vessel.name = ping.ship_name;
+
+            if (ping.is_anomaly) {
+                if (!vessel.hasAnomaly) { vessel.hasAnomaly = true; totalAnomaliesCount++; document.getElementById('stat-anomalies').innerText = totalAnomaliesCount; }
+                if (ping.speed > 30) vessel.anomalyReasons.add(`Unrealistic Speed: Recorded at ${ping.speed} knots.`);
+                if (ping.time_gap > 30) vessel.anomalyReasons.add(`Transponder Blackout: ${ping.time_gap} min silence.`);
+                if (ping.dbscan_dist > 0.3) vessel.anomalyReasons.add(`DBSCAN Flag: Density distance (${ping.dbscan_dist}) > eps: 0.3.`);
+            }
+
+            vessel.history.push(ping);
+            if (vessel.history.length > 50) vessel.history.shift();
+
+            document.getElementById('stat-total').innerText = Object.keys(vessels).length;
+            updateSidebarCard(vessel, ping);
+            
+            if (focusedMmsi === mmsi && document.getElementById('inspector-view').classList.contains('active')) renderInspector(mmsi);
+            renderMap();
+        };
+
+        function updateSidebarCard(vessel, latestPing) {
+            const feed = document.getElementById('feed');
+            const cardId = `card-${vessel.mmsi}`;
+            let card = document.getElementById(cardId);
+
+            if (!card) {
+                card = document.createElement('div');
+                card.id = cardId;
+                card.onclick = () => { switchView('inspector-view'); focusShip(vessel.mmsi); };
+                feed.appendChild(card);
+            }
+
+            card.className = `card ${focusedMmsi === vessel.mmsi ? 'active-card' : ''}`;
+            card.innerHTML = `
+                <div class="card-stripe" style="background: ${vessel.hasAnomaly ? '#f43f5e' : vessel.color};"></div>
+                <div class="card-row"><div class="vessel-title" title="${vessel.name}">${vessel.name}</div><span class="badge ${vessel.hasAnomaly ? 'badge-warning' : 'badge-normal'}">${vessel.hasAnomaly ? 'SUSPECT' : 'NORMAL'}</span></div>
+                <div class="card-row" style="margin-top: 2px;"><div class="mmsi-label">MMSI: ${vessel.mmsi}</div></div>
+                <div class="card-meta"><span>⚡ ${latestPing.speed} kn</span><span>⏱ ${latestPing.time_gap}m</span><span>📍 ${latestPing.lat.toFixed(3)}, ${latestPing.lon.toFixed(3)}</span></div>
+            `;
+            if (vessel.hasAnomaly && feed.firstChild !== card) feed.insertBefore(card, feed.firstChild);
+        }
+
+        function focusShip(mmsi) {
+            focusedMmsi = mmsi;
+            document.querySelectorAll('.card').forEach(c => c.classList.remove('active-card'));
+            const activeCard = document.getElementById(`card-${mmsi}`);
+            if (activeCard) activeCard.classList.add('active-card');
+
+            renderInspector(mmsi);
+            renderMap();
+
+            const vessel = vessels[mmsi];
+            if (vessel && vessel.history.length > 1) {
+                const latlngs = vessel.history.map(p => [p.lat, p.lon]);
+                map.fitBounds(L.latLngBounds(latlngs), { padding: [50, 50], maxZoom: 13, animate: true });
+            } else if (vessel && vessel.history.length === 1) {
+                map.panTo([vessel.history[0].lat, vessel.history[0].lon]);
+            }
+        }
+
+        function renderInspector(mmsi) {
+            const vessel = vessels[mmsi];
+            if (!vessel) return;
+            const latestPing = vessel.history[vessel.history.length - 1];
+
+            document.getElementById('insp-name').innerText = vessel.name;
+            document.getElementById('insp-mmsi').innerText = vessel.mmsi;
+            document.getElementById('insp-count').innerText = vessel.history.length;
+            document.getElementById('insp-speed').innerText = `${latestPing.speed} kn`;
+            document.getElementById('insp-badge').className = `badge ${vessel.hasAnomaly ? 'badge-warning' : 'badge-normal'}`;
+            document.getElementById('insp-badge').innerText = vessel.hasAnomaly ? 'SUSPECT TARGET' : 'NORMAL';
+
+            const reasonsBox = document.getElementById('insp-reasons');
+            if (vessel.hasAnomaly && vessel.anomalyReasons.size > 0) {
+                reasonsBox.style.display = 'block';
+                let reasonHtml = '<strong>⚠️ Forensic Anomaly Diagnostic:</strong><ul style="padding-left: 16px;">';
+                vessel.anomalyReasons.forEach(r => reasonHtml += `<li>${r}</li>`);
+                reasonsBox.innerHTML = reasonHtml + '</ul>';
+            } else { reasonsBox.style.display = 'none'; }
+
+            const tbody = document.getElementById('insp-table-body');
+            tbody.innerHTML = '';
+            [...vessel.history].reverse().forEach((p) => {
+                const tr = document.createElement('tr');
+                if (p.is_anomaly) tr.className = 'ping-anomaly';
+
+                const localDate = new Date(p.time + "Z");
+                let timeFormatted = '--';
+                if (!isNaN(localDate)) {
+                    timeFormatted = showUTC ? 
+                        localDate.toLocaleString(undefined, { timeZone: 'UTC', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' }) + ' UTC' : 
+                        localDate.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                }
+
+                tr.innerHTML = `<td style="white-space: nowrap;">${timeFormatted}</td><td>${p.speed} kn</td><td>${p.time_gap}m</td><td>${p.distance_gap || 0} km</td><td>${p.is_anomaly ? '⚠️ FLAG' : 'OK'}</td>`;
+                tr.onclick = (e) => { e.stopPropagation(); map.setView([p.lat, p.lon], 14); };
+                tbody.appendChild(tr);
+            });
+        }
+
+        function clearFocus() { 
+            focusedMmsi = null; 
+            document.querySelectorAll('.card').forEach(c => c.classList.remove('active-card')); 
+            
+            // Re-center map to the active region from the dropdown
+            const val = document.getElementById('region-select').value;
+            const region = regions[val];
+            if (region) {
+                map.setView(region.center, region.zoom);
+            }
+            
+            renderMap(); 
+        }
+
+        function renderMap() {
+            mapLayers.forEach(layer => map.removeLayer(layer)); mapLayers = [];
+            if (focusedMmsi && vessels[focusedMmsi]) {
+                const vessel = vessels[focusedMmsi]; const history = vessel.history;
+                if (history.length > 1) {
+                    mapLayers.push(L.polyline(history.map(p => [p.lat, p.lon]), { color: vessel.color, weight: 3, opacity: 0.85, dashArray: '4, 6' }).addTo(map));
+                }
+                history.forEach((ping, idx) => {
+                    const isLatest = idx === history.length - 1;
+                    const markerColor = ping.is_anomaly ? '#f43f5e' : vessel.color;
+                    const marker = L.circleMarker([ping.lat, ping.lon], { radius: ping.is_anomaly ? 7 : (isLatest ? 6 : 4), color: markerColor, fillColor: markerColor, fillOpacity: ping.is_anomaly ? 1 : 0.7, weight: isLatest ? 2 : 1 }).addTo(map);
+                    marker.bindPopup(`<strong>${vessel.name}</strong><br>Speed: ${ping.speed} kn<br>Gap: ${ping.time_gap} min<br>Status: ${ping.is_anomaly ? '<span style="color:#f43f5e;">⚠️ ANOMALOUS PING</span>' : 'Normal'}`);
+                    mapLayers.push(marker);
+                });
+            } else {
+                Object.values(vessels).forEach(vessel => {
+                    if (!vessel.history.length) return;
+                    const latest = vessel.history[vessel.history.length - 1];
+                    const markerColor = latest.is_anomaly ? '#f43f5e' : vessel.color;
+                    const marker = L.circleMarker([latest.lat, latest.lon], { radius: latest.is_anomaly ? 6 : 4, color: markerColor, fillColor: markerColor, fillOpacity: 0.85, weight: 1 }).addTo(map);
+                    marker.on('click', () => { switchView('inspector-view'); focusShip(vessel.mmsi); });
+                    marker.bindTooltip(`<b>${vessel.name}</b> (${latest.speed} kn)`, { direction: 'top', offset: [0, -4] });
+                    mapLayers.push(marker);
+                });
+            }
+        }
+    </script>
+</body>
+</html>
