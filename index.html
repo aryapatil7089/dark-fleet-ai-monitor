@@ -97,11 +97,11 @@
             <div class="region-container">
                 <label for="region-select">Active Monitoring Zone</label>
                 <select id="region-select" class="region-select" onchange="changeRegion()">
-                    <option value="singapore">Singapore Strait (Asia)</option>
+                    <option value="singapore" selected>Singapore Strait (Asia)</option>
                     <option value="english_channel">English Channel (Europe)</option>
                     <option value="gulf_mexico">Gulf of Mexico (North America)</option>
                     <option value="gibraltar">Strait of Gibraltar (Europe/Africa)</option>
-                    <option value="global">Global Ocean View (All Ships)</option>
+                    <option value="malacca_wide">Malacca & South China Sea (Macro View)</option>
                 </select>
             </div>
 
@@ -193,29 +193,35 @@
         let mapLayers = [];      
         let totalAnomaliesCount = 0;
         let showUTC = false;     
+        let renderScheduled = false; // Throttling flag
         
-        // Define Regions
+        // Define Regions (Capped to realistic streaming bounds)
         const regions = {
             'singapore': { bbox: [[[1.15, 103.6], [1.35, 104.0]]], center: [1.25, 103.9], zoom: 10 },
             'english_channel': { bbox: [[[50.8, 1.1], [51.2, 1.8]]], center: [51.0, 1.45], zoom: 10 },
             'gulf_mexico': { bbox: [[[28.5, -95.5], [29.8, -94.2]]], center: [29.15, -94.85], zoom: 9 },
             'gibraltar': { bbox: [[[35.7, -6.0], [36.2, -5.2]]], center: [35.95, -5.6], zoom: 10 },
-            'global': { bbox: [[[-90, -180], [90, 180]]], center: [20, 0], zoom: 2 }
+            'malacca_wide': { bbox: [[[0.5, 102.0], [3.0, 105.0]]], center: [1.8, 103.5], zoom: 8 }
         };
 
-        // Dynamic WebSocket protocol selection
         const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
         const ws = new WebSocket(protocol + window.location.host + '/ws/frontend');
 
-        // Change Region Command
+        // Force backend synchronization on initial connection / page refresh
+        ws.onopen = function() {
+            const currentSelected = document.getElementById('region-select').value;
+            const region = regions[currentSelected] || regions['singapore'];
+            ws.send(JSON.stringify({ action: "change_region", bbox: region.bbox }));
+        };
+
         function changeRegion() {
             const val = document.getElementById('region-select').value;
             const region = regions[val];
+            if (!region) return;
             
-            // 1. Pan Camera
             map.setView(region.center, region.zoom);
             
-            // 2. Wipe Local State
+            // Wipe local UI state
             vessels = {};
             mapLayers.forEach(layer => map.removeLayer(layer));
             mapLayers = [];
@@ -225,7 +231,7 @@
             document.getElementById('feed').innerHTML = '';
             clearFocus();
             
-            // 3. Command Backend Server
+            // Force backend satellite reconnection with new bounding box
             if (ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({ action: "change_region", bbox: region.bbox }));
             }
@@ -322,8 +328,18 @@
             document.getElementById('stat-total').innerText = Object.keys(vessels).length;
             updateSidebarCard(vessel, ping);
             
-            if (focusedMmsi === mmsi && document.getElementById('inspector-view').classList.contains('active')) renderInspector(mmsi);
-            renderMap();
+            if (focusedMmsi === mmsi && document.getElementById('inspector-view').classList.contains('active')) {
+                renderInspector(mmsi);
+            }
+            
+            // Throttle map rendering: redraw at most once every 300ms to eliminate browser lag
+            if (!renderScheduled) {
+                renderScheduled = true;
+                setTimeout(() => {
+                    renderMap();
+                    renderScheduled = false;
+                }, 300);
+            }
         };
 
         function updateSidebarCard(vessel, latestPing) {
@@ -410,7 +426,6 @@
             focusedMmsi = null; 
             document.querySelectorAll('.card').forEach(c => c.classList.remove('active-card')); 
             
-            // Re-center map to the active region from the dropdown
             const val = document.getElementById('region-select').value;
             const region = regions[val];
             if (region) {
