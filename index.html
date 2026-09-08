@@ -101,7 +101,7 @@
                     <option value="english_channel">English Channel (Europe)</option>
                     <option value="gulf_mexico">Gulf of Mexico (North America)</option>
                     <option value="gibraltar">Strait of Gibraltar (Europe/Africa)</option>
-                    <option value="malacca_wide">Malacca & South China Sea (Macro View)</option>
+                    <option value="global">Global Ocean View (All Ships)</option>
                 </select>
             </div>
 
@@ -201,7 +201,7 @@
             'english_channel': { bbox: [[[50.8, 1.1], [51.2, 1.8]]], center: [51.0, 1.45], zoom: 10 },
             'gulf_mexico': { bbox: [[[28.5, -95.5], [29.8, -94.2]]], center: [29.15, -94.85], zoom: 9 },
             'gibraltar': { bbox: [[[35.7, -6.0], [36.2, -5.2]]], center: [35.95, -5.6], zoom: 10 },
-            'malacca_wide': { bbox: [[[0.5, 102.0], [3.0, 105.0]]], center: [1.8, 103.5], zoom: 8 }
+            'global': { bbox: [[[-90, -180], [90, 180]]], center: [20, 0], zoom: 2 }
         };
 
         const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
