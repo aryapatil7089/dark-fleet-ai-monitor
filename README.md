@@ -53,7 +53,7 @@ The web application provides instant situational awareness via:
 * [`main.py`](./main.py): The FastAPI cloud server, ML inference pipeline, and WebSocket hub.
 * [`index.html`](./index.html): The interactive Leaflet.js frontend dashboard and forensic panel.
 * [`Dark_Fleet_Model_Training.ipynb`](./Dark_Fleet_Model_Training.ipynb): Complete EDA, feature engineering, K-Means clustering, and DBSCAN thresholding notebook.
-* [`sampled_NOAA_AIS_logs.parquet`](./sampled_NOAA_AIS_logs.parquet): The 45 MB downsampled NOAA Marine Cadastre dataset used to train the local model.
+* [`sampled_NOAA_AIS_logs.parquet`](./sampled_NOAA_AIS_logs.parquet.csv): The 45 MB downsampled NOAA Marine Cadastre dataset used to train the local model.
 * [`Dark_Fleet_Presentation.pptx`](./Dark_Fleet_Presentation.pptx): Project presentation slides detailing the architecture and business impact.
 * [`Dockerfile`](./Dockerfile): Production container definition configured for Render's dynamic port binding.
 * [`scaler.pkl`](./scaler.pkl): The serialized `StandardScaler` transformation object.
