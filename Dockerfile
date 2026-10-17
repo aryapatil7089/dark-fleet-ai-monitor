@@ -1,15 +1,24 @@
-# Use official lightweight Python image
-FROM python:3.10-slim
+FROM python:3.11-slim
 
-# Set the working directory
+# Install system dependencies and Nginx
+RUN apt-get update && \
+    apt-get install -y nginx && \
+    rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 
-# Install system dependencies if required and Python packages
+# Install Python requirements
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all application assets into the container
+# Copy all application files (including main.py, app.py, graph.py, and your ML models)
 COPY . .
 
-# Run Uvicorn binding to Render's dynamic $PORT (fallback to 8000)
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+# Make the start script executable
+RUN chmod +x start.sh
+
+# Expose the master port expected by Render and Nginx
+ENV PORT=10000
+EXPOSE 10000
+
+CMD ["./start.sh"]
